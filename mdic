@@ -1,0 +1,235 @@
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Font, Alignment, PatternFill
+
+wb = Workbook()
+
+def autosize(ws):
+    for col in range(1, ws.max_column+1):
+        max_len = 0
+        for row in range(1, ws.max_row+1):
+            v = ws.cell(row=row, column=col).value
+            if v is None:
+                continue
+            max_len = max(max_len, len(str(v)))
+        ws.column_dimensions[get_column_letter(col)].width = min(60, max(12, max_len + 2))
+
+header_fill = PatternFill("solid", fgColor="1F2937")
+header_font = Font(color="FFFFFF", bold=True)
+wrap = Alignment(wrap_text=True, vertical="top")
+
+# Overview
+ws = wb.active
+ws.title = "Overview"
+overview = [
+    ["Calculator", "Manufacturing Decision Impact Calculator (MDIC)"],
+    ["Tagline", "What does this decision actually cost the plant?"],
+    ["Primary user", "Plant managers / operations managers / production leadership"],
+    ["Purpose", "Translate common management decisions into estimated financial + operational impact (cost, margin, risk, OEE delta)."],
+    ["Decision types", "Overtime, Temp Labor, Headcount Reduction, Defer PM, Increase Production Rate, Delay CAPEX"],
+    ["Core outputs", "Net weekly/monthly impact, cost drivers (labor/scrap/downtime/opportunity), margin impact, risk score, decision summary"],
+]
+for r in overview:
+    ws.append(r)
+ws["A1"].font = Font(bold=True)
+autosize(ws)
+
+# Inputs
+ws = wb.create_sheet("Inputs")
+headers = ["Decision Type", "Input Group", "Input Name", "Units", "Default", "Allowed/Notes", "Required?"]
+ws.append(headers)
+for c in range(1, len(headers)+1):
+    cell = ws.cell(row=1, column=c)
+    cell.fill = header_fill
+    cell.font = header_font
+    cell.alignment = wrap
+
+inputs = [
+    ["All", "Common", "Time horizon", "weeks", 6, "Used to compute totals. Allow weeks or months.", "Y"],
+    ["All", "Common", "Work weeks per year", "weeks/yr", 50, "For annualized rollups.", "N"],
+    ["All", "Common", "Shifts per day", "shifts/day", 1, "Optional.", "N"],
+    ["All", "Common", "Hours per shift", "hr/shift", 8, "Optional.", "N"],
+    ["All", "Common", "Selling price per unit", "$/unit", 0, "If unknown, set 0 and skip revenue-only metrics.", "N"],
+    ["All", "Common", "Contribution margin %", "%", 35, "Used for profit impact vs revenue impact.", "N"],
+    ["All", "Common", "Baseline output rate", "units/hr", 0, "Average good units per runtime hour.", "Y"],
+    ["All", "Common", "Baseline scrap rate", "%", 2.0, "Scrap as % of total units.", "N"],
+    ["All", "Common", "Baseline downtime", "hr/week", 2.0, "Unplanned downtime per week.", "N"],
+    ["All", "Common", "Fully burdened labor cost", "$/hr", 35, "Direct labor incl. taxes/benefits; manager can override.", "Y"],
+    ["All", "Common", "Overhead add-on %", "%", 0, "Optional load (utilities, supervision, etc.).", "N"],
+    ["All", "Common", "Planned runtime per week", "hr/week", 40, "For opportunity cost + OEE proxy.", "Y"],
+
+    ["Overtime", "Labor", "Overtime hours per week", "hr/week", 10, "OT hours for impacted team/line.", "Y"],
+    ["Overtime", "Labor", "Overtime premium", "multiplier", 1.5, "1.5 typical; allow 2.0.", "Y"],
+    ["Overtime", "Performance", "Fatigue productivity delta", "%", -3.0, "Estimated performance change due to OT.", "N"],
+    ["Overtime", "Quality", "Fatigue scrap delta", "pp", 0.5, "Percentage-point increase in scrap rate.", "N"],
+    ["Overtime", "Downtime", "Fatigue downtime delta", "hr/week", 0.2, "Extra downtime from breakdowns/slowdowns.", "N"],
+
+    ["Temp Labor", "Labor", "Temp hours per week", "hr/week", 20, "Total temp hours.", "Y"],
+    ["Temp Labor", "Labor", "Temp hourly cost", "$/hr", 45, "Agency rate all-in.", "Y"],
+    ["Temp Labor", "Performance", "Temp productivity factor", "%", 80, "Temp output vs baseline operator (0-100%).", "N"],
+    ["Temp Labor", "Quality", "Temp scrap delta", "pp", 1.0, "Scrap increase due to training curve.", "N"],
+    ["Temp Labor", "Training", "Trainer hours per week", "hr/week", 2, "Hours of senior staff diverted.", "N"],
+
+    ["Headcount Reduction", "Workforce", "Positions removed", "count", 1, "FTE removed.", "Y"],
+    ["Headcount Reduction", "Workforce", "Hours per FTE per week", "hr/week", 40, "Standard.", "Y"],
+    ["Headcount Reduction", "Workforce", "Replacement overtime hours/week", "hr/week", 8, "Extra OT used to cover.", "N"],
+    ["Headcount Reduction", "Performance", "Output loss %", "%", -5.0, "Estimated throughput reduction vs baseline.", "N"],
+    ["Headcount Reduction", "Quality", "Scrap delta", "pp", 0.5, "Scrap increase from understaffing.", "N"],
+    ["Headcount Reduction", "Downtime", "Downtime delta", "hr/week", 0.3, "More downtime due to coverage gaps.", "N"],
+
+    ["Defer PM", "Maintenance", "PM hours deferred per week", "hr/week", 2, "Hours of PM that won't occur.", "Y"],
+    ["Defer PM", "Maintenance", "Maintenance labor cost", "$/hr", 45, "PM tech burdened rate.", "Y"],
+    ["Defer PM", "Risk", "Failure probability increase", "%/week", 2.0, "Incremental probability of major failure per week.", "Y"],
+    ["Defer PM", "Risk", "Expected failure downtime", "hr/event", 12, "If failure occurs.", "Y"],
+    ["Defer PM", "Risk", "Expected repair cost", "$/event", 2500, "Parts + labor.", "Y"],
+    ["Defer PM", "Quality", "Scrap delta", "pp", 0.2, "Drift/out-of-spec risk.", "N"],
+
+    ["Increase Rate", "Production", "Target rate increase", "%", 10.0, "Percent increase to baseline rate.", "Y"],
+    ["Increase Rate", "Quality", "Scrap delta", "pp", 0.7, "Scrap increase from pushing rate.", "N"],
+    ["Increase Rate", "Downtime", "Downtime delta", "hr/week", 0.5, "More stops from jams/overloads.", "N"],
+    ["Increase Rate", "Labor", "Additional labor hours/week", "hr/week", 0, "If faster rate requires staffing.", "N"],
+
+    ["Delay CAPEX", "Finance", "CAPEX amount deferred", "$", 100000, "Purchase cost.", "Y"],
+    ["Delay CAPEX", "Finance", "Expected annual savings if purchased", "$/yr", 40000, "Labor savings, scrap reduction, uptime gains.", "Y"],
+    ["Delay CAPEX", "Finance", "Expected deployment lead time", "weeks", 8, "Time to install/realize benefits.", "N"],
+    ["Delay CAPEX", "Finance", "Cost of capital", "%/yr", 10.0, "Optional discount rate.", "N"],
+]
+for r in inputs:
+    ws.append(r)
+for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+    for cell in row:
+        cell.alignment = wrap
+autosize(ws)
+
+# Formulas
+ws = wb.create_sheet("Formulas")
+headers = ["Metric", "Formula", "Notes"]
+ws.append(headers)
+for c in range(1, len(headers)+1):
+    cell = ws.cell(row=1, column=c)
+    cell.fill = header_fill
+    cell.font = header_font
+    cell.alignment = wrap
+
+formulas = [
+    ["Weekly gross units (baseline)", "Baseline output rate × Planned runtime/week", "Baseline throughput proxy."],
+    ["Baseline scrap units", "Baseline units × Baseline scrap rate", "Scrap rate as decimal."],
+    ["Baseline good units", "Baseline units − Baseline scrap units", ""],
+    ["Opportunity cost per downtime hour", "Baseline output rate × Selling price × Contribution margin %", "Profit proxy per hour down."],
+    ["OT labor cost/week", "OT hours/week × Burdened labor $/hr × OT premium × (1 + Overhead %)", ""],
+    ["OT units delta (performance)", "Baseline units × Fatigue productivity delta %", "Typically negative."],
+    ["OT scrap delta (units)", "Baseline units × Fatigue scrap delta (pp)", "pp to decimal."],
+    ["OT downtime delta (units)", "Fatigue downtime delta (hr/wk) × Baseline output rate", ""],
+    ["Temp labor cost/week", "Temp hours/week × Temp $/hr + Trainer hours/week × Burdened labor $/hr", ""],
+    ["Temp units gained", "Temp hours × Baseline output rate × Temp productivity factor", "Factor as decimal."],
+    ["Temp scrap delta (units)", "Temp units × Temp scrap delta (pp)", ""],
+    ["Headcount savings/week", "Positions removed × Hours/FTE/week × Burdened labor $/hr × (1 + Overhead %)", "Savings."],
+    ["Headcount units delta", "Baseline units × Output loss %", "Negative."],
+    ["Defer PM expected failure cost/week", "Failure prob inc %/wk × (Repair cost + Failure downtime hr × Opportunity cost/hr)", "Expected value."],
+    ["Defer PM short-term savings/week", "PM hours deferred × Maintenance labor $/hr", ""],
+    ["Increase rate gross gain (units)", "Baseline units × Target rate increase %", ""],
+    ["Increase rate downtime loss (units)", "Downtime delta hr/week × Baseline output rate", ""],
+    ["Increase rate scrap loss (units)", "(Baseline units + gain) × Scrap delta (pp)", ""],
+    ["Delay CAPEX lost savings", "(Annual savings ÷ 52) × max(0, Horizon − lead time)", "If lead time > horizon, lost=0."],
+    ["Net profit impact/week", "(ΔGood units × Selling price × CM%) − incremental costs + savings", "If price=0, show cost-only metrics."],
+]
+for r in formulas:
+    ws.append(r)
+for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+    for cell in row:
+        cell.alignment = wrap
+autosize(ws)
+
+# UI
+ws = wb.create_sheet("UI")
+headers = ["Section", "UI Element", "Details", "Validation/Behavior"]
+ws.append(headers)
+for c in range(1, len(headers)+1):
+    cell = ws.cell(row=1, column=c)
+    cell.fill = header_fill
+    cell.font = header_font
+    cell.alignment = wrap
+
+ui_rows = [
+    ["Header", "Title + tagline", "MDIC — Manufacturing Decision Impact Calculator; MfgCalc branding", ""],
+    ["Step 1", "Decision type dropdown", "Overtime / Temp Labor / Headcount Reduction / Defer PM / Increase Rate / Delay CAPEX", "Switches visible input groups"],
+    ["Step 2", "Common inputs card", "Horizon, baseline rate, runtime/week, labor $/hr, selling price, CM%", "Inline errors; required fields enforced"],
+    ["Step 3", "Decision-specific inputs", "Dynamic inputs for selected mode; manager-friendly defaults", "Show assumptions tooltips"],
+    ["Results", "KPI tiles", "Net impact/week, total impact, margin impact, risk badge", "Disabled until required inputs valid"],
+    ["Results", "Breakdown chart", "Stacked breakdown by driver (labor/scrap/downtime/opportunity/savings)", "Tooltips with values + notes"],
+    ["Results", "Decision summary", "Plain-English tradeoff sentence", "Generated from thresholds"],
+    ["Actions", "Export CSV", "Inputs+outputs as one row", "Download CSV"],
+    ["Actions", "Share link", "Querystring permalink", "Copy to clipboard"],
+    ["Help", "Definitions + FAQ", "Explain estimates and how to use results", "Collapsible sections"],
+]
+for r in ui_rows:
+    ws.append(r)
+for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+    for cell in row:
+        cell.alignment = wrap
+autosize(ws)
+
+# GitHub Plan
+ws = wb.create_sheet("GitHub_Plan")
+headers = ["Type", "Title", "Description", "Labels", "Acceptance Criteria"]
+ws.append(headers)
+for c in range(1, len(headers)+1):
+    cell = ws.cell(row=1, column=c)
+    cell.fill = header_fill
+    cell.font = header_font
+    cell.alignment = wrap
+
+milestone_title = "MDIC — Manufacturing Decision Impact Calculator"
+milestone_desc = "Build and publish the Manufacturing Decision Impact Calculator (management-first) including decision modes, financial/ops impact outputs, risk score, exports, SEO page, and GoDaddy embed."
+ws.append(["Milestone", milestone_title, milestone_desc, "milestone", "Published to GitHub Pages; embedded in GoDaddy; QA scenarios pass"])
+
+issues = [
+    ["Issue", "MDIC: Create project skeleton (React/Vite/Tailwind)", "Initialize repo, base path, layout components.", "react,frontend,setup", "Runs locally; deployable build works"],
+    ["Issue", "MDIC: Implement decision type switcher + common inputs", "Dropdown + shared baseline inputs with validation and defaults.", "frontend,ux", "Switching works; validation messages show"],
+    ["Issue", "MDIC: Implement Overtime mode calculations + UI", "Inputs + formulas + results breakdown for Overtime.", "calculator,logic", "Matches formulas; unit tests pass"],
+    ["Issue", "MDIC: Implement Temp Labor mode calculations + UI", "Inputs + formulas + results breakdown for Temp Labor.", "calculator,logic", "Matches formulas; unit tests pass"],
+    ["Issue", "MDIC: Implement Headcount Reduction mode calculations + UI", "Inputs + formulas + results breakdown for Headcount Reduction.", "calculator,logic", "Matches formulas; unit tests pass"],
+    ["Issue", "MDIC: Implement Defer PM mode (expected value risk)", "Failure probability EV model + UI + risk messaging.", "calculator,logic,risk", "EV outputs correct; risk badge works"],
+    ["Issue", "MDIC: Implement Increase Rate mode calculations + UI", "Rate increase, downtime delta, scrap delta, extra labor hours.", "calculator,logic", "Outputs align with formulas"],
+    ["Issue", "MDIC: Implement Delay CAPEX mode calculations + UI", "Lost savings vs horizon + optional discounting.", "calculator,finance", "Outputs align; edge cases handled"],
+    ["Issue", "MDIC: Results visualization + breakdown chart", "KPI tiles + stacked breakdown chart + summary statement.", "frontend,charts", "Charts render; totals reconcile"],
+    ["Issue", "MDIC: Export CSV + shareable link", "Query param serialization; CSV export of inputs+outputs.", "frontend,export", "Export downloads; links reproduce state"],
+    ["Issue", "MDIC: SEO + GoDaddy embed page copy", "Draft page copy, FAQ, internal links; embed instructions.", "seo,content", "Page ready; metadata suggested"],
+    ["Issue", "MDIC: QA checklist + sanity test cases", "Define 6 sanity scenarios and expected outputs ranges.", "qa", "All scenarios pass"],
+]
+for r in issues:
+    ws.append(r)
+
+for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+    for cell in row:
+        cell.alignment = wrap
+autosize(ws)
+
+# Assumptions
+ws = wb.create_sheet("Assumptions")
+headers = ["Assumption", "Default", "Rationale", "User Override?"]
+ws.append(headers)
+for c in range(1, len(headers)+1):
+    cell = ws.cell(row=1, column=c)
+    cell.fill = header_fill
+    cell.font = header_font
+    cell.alignment = wrap
+
+assumptions = [
+    ["Contribution margin % used for profit impacts", 35, "Lets revenue impacts translate to profit without full cost model.", "Yes"],
+    ["Opportunity cost per downtime hour uses baseline output rate", "Baseline output rate × price × CM%", "Manager-friendly proxy.", "Yes"],
+    ["Scrap deltas entered as percentage points (pp)", 0.5, "Easier estimates than relative changes.", "Yes"],
+    ["Defer PM uses expected value model", "Prob/week × (repair + downtime)", "Simple risk math; explainable.", "Yes"],
+    ["Risk score uses rule-based thresholds", "Low/Med/High", "Transparent scoring for leadership communication.", "Later configurable"],
+]
+for r in assumptions:
+    ws.append(r)
+
+for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+    for cell in row:
+        cell.alignment = wrap
+autosize(ws)
+
+path = "/mnt/data/MfgCalc_MDIC_Spec_and_GitHub_Tracker.xlsx"
+wb.save(path)
+path

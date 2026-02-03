@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/MDIC/',     // MUST match the repo name exactly (MDIC)
+  base: '/mdic/',
   build: {
-    outDir: 'docs',   // Build output for GitHub Pages
+    outDir: 'docs',
   },
 })

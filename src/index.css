@@ -123,7 +123,7 @@ body{
   border: 1px solid var(--mfg-border);
   border-radius: var(--mfg-radius);
   box-shadow: var(--mfg-shadow);
-  padding: 14px;
+  padding: 16px;
 }
 
 .mdic-card h2{
@@ -140,7 +140,7 @@ body{
 /* Inputs layout: prevents “interference” on narrow widths */
 .mdic-fields{
   display: grid;
-  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
 }
 

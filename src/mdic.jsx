@@ -39,6 +39,13 @@ export default function MDIC() {
   const [fatigueScrapDeltaPp, setFatigueScrapDeltaPp] = useState(0.5); // pp
   const [fatigueDowntimeDeltaHr, setFatigueDowntimeDeltaHr] = useState(0.2); // hr/wk
 
+  // Delay CAPEX inputs
+  const [capexAmount, setCapexAmount] = useState(100000);
+  const [annualSavings, setAnnualSavings] = useState(40000);
+  const [deploymentLeadWeeks, setDeploymentLeadWeeks] = useState(8);
+  const [costOfCapitalPct, setCostOfCapitalPct] = useState(10); // optional
+
+
   const baseline = useMemo(() => {
     const units = num(baselineUnitsPerHr) * num(runtimePerWeek);
     const goodUnitsPerHr = num(baselineUnitsPerHr); // proxy
@@ -94,10 +101,44 @@ export default function MDIC() {
     horizonWeeks,
   ]);
 
-  const active = useMemo(() => {
-    if (decision === "overtime") return overtimeCalc;
-    return null;
-  }, [decision, overtimeCalc]);
+  const delayCapexCalc = useMemo(() => {
+  const horizon = num(horizonWeeks);
+  const lead = num(deploymentLeadWeeks);
+  const savingsPerWeek = num(annualSavings) / 52;
+
+  // Weeks of benefit you miss during the horizon because you delayed the purchase
+  // If lead time is longer than horizon, you miss 0 within that horizon (you wouldn't have realized benefit anyway)
+  const missedBenefitWeeks = Math.max(0, horizon - lead);
+
+  const lostSavingsWithinHorizon = savingsPerWeek * missedBenefitWeeks;
+
+  // Optional: simple financing/opportunity cost of tying up cash
+  const costOfCapitalPerWeek = (num(costOfCapitalPct) / 100) / 52;
+  const carryingCostWithinHorizon = num(capexAmount) * costOfCapitalPerWeek * horizon;
+
+  // If you delay, you "save" the capex cash outlay now, but incur lost savings + carry cost considerations.
+  // For a manager-facing summary, show the lost savings primarily.
+  const netImpactPerWeek = horizon > 0 ? -(lostSavingsWithinHorizon / horizon) : 0;
+  const totalImpact = -lostSavingsWithinHorizon;
+
+  return {
+    capexAmount: num(capexAmount),
+    annualSavings: num(annualSavings),
+    deploymentLeadWeeks: num(deploymentLeadWeeks),
+    costOfCapitalPct: num(costOfCapitalPct),
+    missedBenefitWeeks,
+    lostSavingsWithinHorizon,
+    carryingCostWithinHorizon,
+    netImpactPerWeek,
+    totalImpact,
+  };
+}, [horizonWeeks, capexAmount, annualSavings, deploymentLeadWeeks, costOfCapitalPct]);
+
+const active = useMemo(() => {
+  if (decision === "overtime") return overtimeCalc;
+  if (decision === "capex") return delayCapexCalc;
+  return null;
+}, [decision, overtimeCalc, delayCapexCalc]);
 
   const isReady =
     num(horizonWeeks) > 0 &&
@@ -164,6 +205,22 @@ export default function MDIC() {
         </div>
       )}
 
+      {decision === "capex" && (
+        <div className="mdic-card">
+          <h2>Delay CAPEX inputs</h2>
+          <div className="mdic-fields">
+            <Field label="CAPEX amount ($)" value={capexAmount} setValue={setCapexAmount} step="1000" />
+            <Field label="Expected annual savings ($/yr)" value={annualSavings} setValue={setAnnualSavings} step="1000" />
+            <Field label="Deployment lead time (weeks)" value={deploymentLeadWeeks} setValue={setDeploymentLeadWeeks} />
+            <Field label="Cost of capital (%/yr, optional)" value={costOfCapitalPct} setValue={setCostOfCapitalPct} step="0.5" />
+          </div>
+          <div className="mdic-help">
+            This estimates the *missed savings within your time horizon* caused by delaying the investment.
+          </div>
+        </div>
+      )}
+
+
       <div className="mdic-card">
         <h2>Results</h2>
 
@@ -174,9 +231,20 @@ export default function MDIC() {
             <div className="mdic-kpis">
               <KPI title="Net impact / week" value={money(active.netImpactPerWeek)} />
               <KPI title="Total impact (horizon)" value={money(active.totalImpact)} />
-              <KPI title="OT labor cost / week" value={money(active.otLaborCost)} />
-              <KPI title="Δ Good units / week" value={Math.round(active.deltaGoodUnits).toLocaleString()} />
+
+              {decision === "capex" ? (
+                <>
+                  <KPI title="Missed benefit weeks" value={String(active.missedBenefitWeeks)} />
+                  <KPI title="Lost savings (within horizon)" value={money(active.lostSavingsWithinHorizon)} />
+                </>
+              ) : (
+                <>
+                  <KPI title="OT labor cost / week" value={money(active.otLaborCost)} />
+                  <KPI title="Δ Good units / week" value={Math.round(active.deltaGoodUnits).toLocaleString()} />
+                </>
+              )}
             </div>
+
 
             <div className="mdic-summary">
               <strong>Decision summary:</strong>{" "}
@@ -223,7 +291,6 @@ function Field({ label, value, setValue, step = "1" }) {
   );
 }
 
-
 function KPI({ title, value }) {
   return (
     <div className="mdic-kpi">
@@ -232,7 +299,6 @@ function KPI({ title, value }) {
     </div>
   );
 }
-
 
 function Row({ label, value }) {
   return (

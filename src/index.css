@@ -224,3 +224,8 @@ body{
   border: 1px solid var(--mfg-border);
   color: var(--mfg-text);
 }
+
+/* PROOF THIS FILE IS LOADING */
+.mdic-wrap {
+  outline: 4px solid red !important;
+}

@@ -95,8 +95,9 @@ body{
 
 /* ===== MDIC shared UI ===== */
 .mdic-wrap{
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   padding: 18px;
   font-family: system-ui, Segoe UI, Arial, sans-serif;
 }
@@ -140,8 +141,9 @@ body{
 /* Inputs layout: prevents “interference” on narrow widths */
 .mdic-fields{
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 14px;
+  align-items: start;
 }
 
 @media (max-width: 1100px){
@@ -164,6 +166,7 @@ body{
 
 .mdic-input, .mdic-select{
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid var(--mfg-border);

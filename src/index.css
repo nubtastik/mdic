@@ -93,15 +93,17 @@ body{
   color: var(--mfg-text);
 }
 
+/* predictable widths everywhere */
+*, *::before, *::after { box-sizing: border-box; }
+
 /* ===== MDIC shared UI ===== */
+/* Fill the iframe / page width */
 .mdic-wrap{
   width: 100%;
-  max-width: none;
-  margin: 0;
+  max-width: 100% !important;
+  margin: 0 !important;
   padding: 18px;
-  font-family: system-ui, Segoe UI, Arial, sans-serif;
 }
-
 .mdic-title{
   margin: 0;
   font-size: 28px;
@@ -139,9 +141,10 @@ body{
 }
 
 /* Inputs layout: prevents “interference” on narrow widths */
+/* Responsive grid that never overlaps in narrow embeds */
 .mdic-fields{
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 14px;
   align-items: start;
 }
